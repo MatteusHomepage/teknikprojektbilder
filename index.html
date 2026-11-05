@@ -399,7 +399,7 @@
         addButton = $("add");
       const editDialog = $("editDialog"),
         viewer = $("viewer");
-      let supabase = null,
+      let supabaseClient = null,
         pendingFile = null,
         editingPhoto = null,
         previewUrl = null;
@@ -436,7 +436,7 @@
             "Webbplatsen behöver konfigureras med din Supabase Project URL och anon key innan den kan användas.",
           );
         }
-        supabase = window.supabase.createClient(
+        supabaseClient = window.supabase.createClient(
           SUPABASE_URL,
           SUPABASE_ANON_KEY,
           {
@@ -459,7 +459,7 @@
         return b;
       }
       async function signedPhotoUrl(path) {
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabaseClient.storage
           .from(BUCKET)
           .createSignedUrl(path, 3600);
         if (error) throw error;
@@ -469,7 +469,7 @@
         activeUrls.forEach((u) => URL.revokeObjectURL(u));
         activeUrls = [];
         grid.replaceChildren();
-        const { data: photos, error } = await supabase
+        const { data: photos, error } = await supabaseClient
           .from(TABLE)
           .select("id,path,title,caption,created_at")
           .order("created_at", { ascending: false });
@@ -574,15 +574,15 @@
             .replace(/[^a-z0-9]/g, "") || "jpg";
         const path = crypto.randomUUID() + "." + ext;
         setStatus("Laddar upp " + file.name + "…");
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabaseClient.storage
           .from(BUCKET)
           .upload(path, file, { contentType: file.type, upsert: false });
         if (uploadError) throw uploadError;
-        const { error: rowError } = await supabase
+        const { error: rowError } = await supabaseClient
           .from(TABLE)
           .insert({ path, title, caption });
         if (rowError) {
-          await supabase.storage.from(BUCKET).remove([path]);
+          await supabaseClient.storage.from(BUCKET).remove([path]);
           throw rowError;
         }
       }
@@ -593,7 +593,7 @@
             '".',
         );
         if (pin === null) return;
-        const { error: authError } = await supabase.auth.signInWithPassword({
+        const { error: authError } = await supabaseClient.auth.signInWithPassword({
           email: ALBUM_LOGIN_EMAIL,
           password: pin,
         });
@@ -610,12 +610,12 @@
         )
           return;
         setStatus("Tar bort bilden…");
-        const { error: rowError } = await supabase
+        const { error: rowError } = await supabaseClient
           .from(TABLE)
           .delete()
           .eq("id", p.id);
         if (rowError) throw rowError;
-        const { error: storageError } = await supabase.storage
+        const { error: storageError } = await supabaseClient.storage
           .from(BUCKET)
           .remove([p.path]);
         if (storageError) throw storageError;
@@ -628,7 +628,7 @@
         $("loginError").textContent = "";
         try {
           const pin = $("pin").value;
-          const { error } = await supabase.auth.signInWithPassword({
+          const { error } = await supabaseClient.auth.signInWithPassword({
             email: ALBUM_LOGIN_EMAIL,
             password: pin,
           });
@@ -648,7 +648,7 @@
         }
       });
       $("logout").addEventListener("click", async () => {
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
         showLogin();
         grid.replaceChildren();
         setStatus("");
@@ -659,7 +659,7 @@
           caption = $("caption").value.trim();
         try {
           if (editingPhoto) {
-            const { error } = await supabase
+            const { error } = await supabaseClient
               .from(TABLE)
               .update({ title, caption })
               .eq("id", editingPhoto.id);
@@ -763,7 +763,7 @@
           requireConfig();
           const {
             data: { session },
-          } = await supabase.auth.getSession();
+          } = await supabaseClient.auth.getSession();
           if (session) {
             showApp();
             await render();
@@ -773,7 +773,5 @@
         }
       })();
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js"></script>
   </body>
 </html>
