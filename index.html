@@ -20,9 +20,7 @@
       }
       body {
         margin: 0;
-        background:
-          radial-gradient(ellipse at 50% -20%, #29372f, transparent 55%),
-          var(--bg);
+        background: linear-gradient(135deg, #0d1410 0%, #17231b 52%, #101713 100%);
         color: var(--text);
         font:
           16px/1.5 system-ui,
@@ -301,9 +299,9 @@
   <body>
     <section id="loginScreen">
       <h2>
-        Matteus's Ai Photo Album<span style="color: var(--accent)">.</span>
+        Teknik projekt<span style="color: var(--accent)">.</span>
       </h2>
-      <p>Ange albumets PIN-kod för att fortsätta.</p>
+      <p>Ange PIN-koden för att öppna.</p>
       <form id="loginForm">
         <label for="pin">PIN-kod</label>
         <input
@@ -316,7 +314,7 @@
           placeholder="Ange PIN-kod"
         />
         <button class="primary" id="loginButton" type="submit">
-          Öppna albumet
+          Öppna sidan.
         </button>
       </form>
       <p id="loginError" role="alert" aria-live="polite"></p>
@@ -423,6 +421,24 @@
           error?.message || String(error || "Ett okänt fel inträffade.");
         return msg;
       }
+      async function verifyPin(action) {
+        const pin = prompt("Ange PIN-koden igen för att " + action + ".");
+        if (pin === null) return false;
+
+        await supabaseClient.auth.signOut();
+
+        const { error } = await supabaseClient.auth.signInWithPassword({
+          email: ALBUM_LOGIN_EMAIL,
+          password: pin,
+        });
+
+        if (error) {
+          alert("Fel PIN-kod. Åtgärden har inte genomförts.");
+          return false;
+        }
+
+        return true;
+      }
       function requireConfig() {
         if (!window.supabase)
           throw new Error(
@@ -441,9 +457,9 @@
           SUPABASE_ANON_KEY,
           {
             auth: {
-              persistSession: true,
+              persistSession: false,
               autoRefreshToken: true,
-              detectSessionInUrl: true,
+              detectSessionInUrl: false,
             },
           },
         );
@@ -568,6 +584,9 @@
         editingPhoto = null;
       }
       async function saveNewFile(file, title, caption) {
+        const authorized = await verifyPin("ladda upp bilden");
+        if (!authorized) return false;
+
         const ext =
           (file.name.split(".").pop() || "jpg")
             .toLowerCase()
@@ -585,22 +604,11 @@
           await supabaseClient.storage.from(BUCKET).remove([path]);
           throw rowError;
         }
+        return true;
       }
       async function deletePhoto(p) {
-        const pin = prompt(
-          'Ange PIN-koden igen för att ta bort "' +
-            (p.title || "bilden") +
-            '".',
-        );
-        if (pin === null) return;
-        const { error: authError } = await supabaseClient.auth.signInWithPassword({
-          email: ALBUM_LOGIN_EMAIL,
-          password: pin,
-        });
-        if (authError) {
-          alert("Fel PIN-kod. Bilden har inte tagits bort.");
-          return;
-        }
+        const authorized = await verifyPin("ta bort bilden");
+        if (!authorized) return;
         if (
           !confirm(
             'Är du säker på att du vill ta bort "' +
@@ -659,6 +667,9 @@
           caption = $("caption").value.trim();
         try {
           if (editingPhoto) {
+            const authorized = await verifyPin("redigera bilden");
+            if (!authorized) return;
+
             const { error } = await supabaseClient
               .from(TABLE)
               .update({ title, caption })
@@ -758,6 +769,15 @@
           }
         }
       });
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted && supabaseClient) {
+          supabaseClient.auth.signOut();
+          showLogin();
+          grid.replaceChildren();
+          setStatus("");
+        }
+      });
+
       (async () => {
         try {
           requireConfig();
